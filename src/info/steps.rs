@@ -597,6 +597,54 @@ fn all_steps() -> Vec<StepInfo> {
                 "Useful as the final step in a test",
             ],
         },
+        StepInfo {
+            name: "waitForColorAt",
+            category: "wait",
+            brief: "Wait for a cell's color to match a value",
+            params: vec![
+                ParamInfo {
+                    name: "row",
+                    required: true,
+                    r#type: "number",
+                    default: None,
+                    description: "Row (0-indexed)",
+                },
+                ParamInfo {
+                    name: "col",
+                    required: true,
+                    r#type: "number",
+                    default: None,
+                    description: "Column (0-indexed)",
+                },
+                ParamInfo {
+                    name: "color",
+                    required: true,
+                    r#type: "string",
+                    default: None,
+                    description: "Color to match: name (red, blue), hex (#ff0000), or index (0-255)",
+                },
+                ParamInfo {
+                    name: "target",
+                    required: false,
+                    r#type: "string",
+                    default: Some("fg"),
+                    description: "Which color to check: \"fg\" (foreground) or \"bg\" (background)",
+                },
+                ParamInfo {
+                    name: "timeoutMs",
+                    required: false,
+                    r#type: "number",
+                    default: Some("30000"),
+                    description: "Timeout in milliseconds",
+                },
+            ],
+            example: r#"waitForColorAt: {row: 0, col: 0, color: "red"}"#,
+            tips: vec![
+                "Useful for testing status indicators that change color",
+                "Color names: black, red, green, yellow, blue, magenta, cyan, white",
+                "Also accepts hex (#ff0000) and 256-color indices (0-255)",
+            ],
+        },
         // Control steps
         StepInfo {
             name: "resize",

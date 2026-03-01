@@ -370,6 +370,15 @@ fn all_methods() -> Vec<MethodInfo> {
             example_request: r#"{"id":1,"method":"wait_for_cursor_at","params":{"row":0,"col":5,"timeout_ms":5000}}"#,
             example_response: r#"{"id":1,"result":null}"#,
         },
+        MethodInfo {
+            name: "wait_for_color_at",
+            category: "wait",
+            brief: "Wait for a cell's color to match",
+            params: r#"{row: number, col: number, color: string, target?: "fg"|"bg", timeout_ms?: number}"#,
+            response: "null",
+            example_request: r#"{"id":1,"method":"wait_for_color_at","params":{"row":0,"col":0,"color":"red","target":"fg","timeout_ms":5000}}"#,
+            example_response: r#"{"id":1,"result":null}"#,
+        },
         // Control
         MethodInfo {
             name: "resize",

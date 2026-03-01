@@ -209,6 +209,17 @@ async fn execute_step(client: &DaemonClient, step: &Step) -> Result<()> {
                 .mouse_move(mouse_move.row, mouse_move.col)
                 .await
         }
+        Step::WaitForColorAt { wait_for_color_at } => {
+            client
+                .wait_for_color_at(
+                    wait_for_color_at.row,
+                    wait_for_color_at.col,
+                    &wait_for_color_at.color,
+                    &wait_for_color_at.target,
+                    timeout(wait_for_color_at.timeout_ms),
+                )
+                .await
+        }
         Step::WaitForExit { wait_for_exit } => {
             client
                 .wait_for_exit(timeout(wait_for_exit.timeout_ms))
@@ -462,6 +473,7 @@ fn step_label(step: &Step) -> String {
         Step::MouseClick { .. } => "mouseClick".to_string(),
         Step::MouseScroll { .. } => "mouseScroll".to_string(),
         Step::MouseMove { .. } => "mouseMove".to_string(),
+        Step::WaitForColorAt { .. } => "waitForColorAt".to_string(),
         Step::WaitForExit { .. } => "waitForExit".to_string(),
         Step::Resize { .. } => "resize".to_string(),
         Step::Sleep { .. } => "sleep".to_string(),

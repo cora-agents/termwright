@@ -507,6 +507,25 @@ async fn handle_request(terminal: &Terminal, req: Request) -> Response {
                 }
                 Ok(Response::ok_empty(id))
             }
+            "wait_for_color_at" => {
+                let params: WaitForColorAtParams = serde_json::from_value(req.params)
+                    .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
+                let position = crate::screen::Position {
+                    row: params.row,
+                    col: params.col,
+                };
+                let color = parse_color(&params.color)?;
+                let builder = match params.target.as_str() {
+                    "bg" => terminal.wait_bg_color(position, color),
+                    _ => terminal.wait_fg_color(position, color),
+                };
+                if let Some(timeout_ms) = params.timeout_ms {
+                    builder.timeout(Duration::from_millis(timeout_ms)).await?;
+                } else {
+                    builder.await?;
+                }
+                Ok(Response::ok_empty(id))
+            }
             "wait_for_exit" => {
                 let params: WaitForExitParams = serde_json::from_value(req.params)
                     .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
@@ -546,6 +565,42 @@ async fn handle_request(terminal: &Terminal, req: Request) -> Response {
     match result {
         Ok(r) => r,
         Err(e) => error_to_response(id, e),
+    }
+}
+
+fn parse_color(s: &str) -> Result<crate::screen::Color> {
+    use crate::screen::Color;
+    let s = s.trim().to_lowercase();
+    match s.as_str() {
+        "default" => Ok(Color::Default),
+        // Named ANSI colors
+        "black" => Ok(Color::Indexed(0)),
+        "red" => Ok(Color::Indexed(1)),
+        "green" => Ok(Color::Indexed(2)),
+        "yellow" => Ok(Color::Indexed(3)),
+        "blue" => Ok(Color::Indexed(4)),
+        "magenta" => Ok(Color::Indexed(5)),
+        "cyan" => Ok(Color::Indexed(6)),
+        "white" => Ok(Color::Indexed(7)),
+        _ if s.starts_with('#') && s.len() == 7 => {
+            let r = u8::from_str_radix(&s[1..3], 16)
+                .map_err(|_| TermwrightError::Protocol(format!("invalid color: {s}")))?;
+            let g = u8::from_str_radix(&s[3..5], 16)
+                .map_err(|_| TermwrightError::Protocol(format!("invalid color: {s}")))?;
+            let b = u8::from_str_radix(&s[5..7], 16)
+                .map_err(|_| TermwrightError::Protocol(format!("invalid color: {s}")))?;
+            Ok(Color::Rgb(r, g, b))
+        }
+        _ => {
+            // Try as indexed color number
+            if let Ok(n) = s.parse::<u8>() {
+                Ok(Color::Indexed(n))
+            } else {
+                Err(TermwrightError::Protocol(format!(
+                    "unknown color: {s}. Use a name (red, blue), hex (#ff0000), or index (0-255)"
+                )))
+            }
+        }
     }
 }
 

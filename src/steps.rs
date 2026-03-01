@@ -199,6 +199,10 @@ pub enum Step {
         #[serde(rename = "mouseMove")]
         mouse_move: MouseMoveStep,
     },
+    WaitForColorAt {
+        #[serde(rename = "waitForColorAt")]
+        wait_for_color_at: WaitForColorAtStep,
+    },
     WaitForExit {
         #[serde(rename = "waitForExit")]
         wait_for_exit: WaitForExitStep,
@@ -368,6 +372,22 @@ impl MouseScrollStep {
 pub struct MouseMoveStep {
     pub row: u16,
     pub col: u16,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WaitForColorAtStep {
+    pub row: u16,
+    pub col: u16,
+    pub color: String,
+    #[serde(default = "default_fg")]
+    pub target: String,
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
+}
+
+fn default_fg() -> String {
+    "fg".to_string()
 }
 
 #[derive(Debug, Deserialize)]

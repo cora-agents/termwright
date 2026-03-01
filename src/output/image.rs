@@ -178,6 +178,42 @@ fn render_screen(screen: &Screen, config: &ScreenshotConfig) -> Result<RgbaImage
         }
     }
 
+    // Draw cursor as a filled block at the cursor position
+    let cursor = screen.cursor();
+    let cursor_row = cursor.row as usize;
+    let cursor_col = cursor.col as usize;
+    if cursor_row < screen.size.rows as usize && cursor_col < screen.size.cols as usize {
+        let cx = cursor_col as f32 * char_width;
+        let cy = cursor_row as f32 * line_height;
+
+        // Get the cell at cursor position for color inversion
+        let cursor_cell = screen.cell(cursor.row, cursor.col);
+        let cursor_fg = cursor_cell
+            .map(|c| color_to_rgba(&c.fg, true))
+            .unwrap_or(Rgba([255, 255, 255, 255]));
+
+        // Draw cursor block (semi-transparent white overlay)
+        let cursor_rect = Rect::at(cx.round() as i32, cy.round() as i32)
+            .of_size(char_width.ceil() as u32, line_height.ceil() as u32);
+        draw_filled_rect_mut(&mut image, cursor_rect, cursor_fg);
+
+        // Redraw the character under cursor in inverted color
+        if let Some(cell) = cursor_cell {
+            if cell.char != ' ' {
+                let bg = color_to_rgba(&cell.bg, false);
+                draw_text_mut(
+                    &mut image,
+                    bg,
+                    cx as i32,
+                    cy as i32,
+                    scale,
+                    &font,
+                    &cell.char.to_string(),
+                );
+            }
+        }
+    }
+
     Ok(image)
 }
 

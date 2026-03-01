@@ -197,6 +197,22 @@ pub struct WaitForExitResult {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct WaitForColorAtParams {
+    pub row: u16,
+    pub col: u16,
+    pub color: String,
+    #[serde(default = "WaitForColorAtParams::default_target")]
+    pub target: String,
+    pub timeout_ms: Option<u64>,
+}
+
+impl WaitForColorAtParams {
+    fn default_target() -> String {
+        "fg".to_string()
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ResizeParams {
     pub cols: u16,
     pub rows: u16,

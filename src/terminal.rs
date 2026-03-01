@@ -557,6 +557,30 @@ impl Terminal {
         }
     }
 
+    /// Wait for a cell's foreground color to match.
+    pub fn wait_fg_color(
+        &self,
+        position: crate::screen::Position,
+        color: crate::screen::Color,
+    ) -> ExpectBuilder<'_> {
+        ExpectBuilder {
+            terminal: self,
+            wait: WaitBuilder::new(WaitCondition::FgColorAt(position, color)),
+        }
+    }
+
+    /// Wait for a cell's background color to match.
+    pub fn wait_bg_color(
+        &self,
+        position: crate::screen::Position,
+        color: crate::screen::Color,
+    ) -> ExpectBuilder<'_> {
+        ExpectBuilder {
+            terminal: self,
+            wait: WaitBuilder::new(WaitCondition::BgColorAt(position, color)),
+        }
+    }
+
     /// Wait for the screen to stabilize (no changes for the given duration).
     pub fn wait_idle(&self, duration: Duration) -> ExpectBuilder<'_> {
         ExpectBuilder {

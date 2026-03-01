@@ -379,6 +379,28 @@ impl DaemonClient {
         Ok(())
     }
 
+    pub async fn wait_for_color_at(
+        &self,
+        row: u16,
+        col: u16,
+        color: &str,
+        target: &str,
+        timeout: Option<Duration>,
+    ) -> Result<()> {
+        self.call::<_, serde_json::Value>(
+            "wait_for_color_at",
+            WaitForColorAtParams {
+                row,
+                col,
+                color: color.to_string(),
+                target: target.to_string(),
+                timeout_ms: timeout.map(|d| d.as_millis() as u64),
+            },
+        )
+        .await?;
+        Ok(())
+    }
+
     pub async fn wait_for_exit(&self, timeout: Option<Duration>) -> Result<i32> {
         let res: WaitForExitResult = self
             .call(

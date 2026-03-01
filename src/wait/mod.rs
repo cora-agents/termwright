@@ -5,7 +5,7 @@ use std::time::Duration;
 use regex::Regex;
 
 use crate::error::TermwrightError;
-use crate::screen::{Position, Screen};
+use crate::screen::{Color, Position, Screen};
 
 /// Default timeout for wait operations.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -28,6 +28,10 @@ pub enum WaitCondition {
     CursorAt(Position),
     /// Wait for the screen to stabilize (no changes for duration).
     ScreenStable(Duration),
+    /// Wait for a cell's foreground color to match.
+    FgColorAt(Position, Color),
+    /// Wait for a cell's background color to match.
+    BgColorAt(Position, Color),
     /// Wait for the process to exit.
     ProcessExit,
 }
@@ -62,6 +66,16 @@ impl WaitCondition {
                     false
                 }
             }
+            WaitCondition::FgColorAt(pos, color) => {
+                screen
+                    .cell(pos.row, pos.col)
+                    .map_or(false, |c| c.fg == *color)
+            }
+            WaitCondition::BgColorAt(pos, color) => {
+                screen
+                    .cell(pos.row, pos.col)
+                    .map_or(false, |c| c.bg == *color)
+            }
             WaitCondition::ProcessExit => {
                 // This is handled specially by the terminal
                 false
@@ -85,6 +99,12 @@ impl WaitCondition {
             }
             WaitCondition::ScreenStable(duration) => {
                 format!("screen stable for {:?}", duration)
+            }
+            WaitCondition::FgColorAt(pos, color) => {
+                format!("fg color {:?} at row={}, col={}", color, pos.row, pos.col)
+            }
+            WaitCondition::BgColorAt(pos, color) => {
+                format!("bg color {:?} at row={}, col={}", color, pos.row, pos.col)
             }
             WaitCondition::ProcessExit => "process to exit".to_string(),
         }
