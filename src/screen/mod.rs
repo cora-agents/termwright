@@ -477,8 +477,24 @@ impl Screen {
                 (start_col + 1) as u16,
                 end_col as u16,
             ),
-            style: BoxStyle::Single, // Could detect double lines too
+            style: self.detect_box_style(start_row, start_col),
         })
+    }
+
+    /// Detect the box drawing style from the top-left corner character.
+    fn detect_box_style(&self, row: usize, col: usize) -> BoxStyle {
+        let corner = self
+            .cells
+            .get(row)
+            .and_then(|r| r.get(col))
+            .map(|c| c.char);
+        match corner {
+            Some('╔') => BoxStyle::Double,
+            Some('┏') => BoxStyle::Heavy,
+            Some('╭') => BoxStyle::Rounded,
+            Some('+') => BoxStyle::Ascii,
+            _ => BoxStyle::Single,
+        }
     }
 
     /// Get the raw cells array (for advanced processing).
@@ -537,6 +553,12 @@ pub enum BoxStyle {
     Single,
     /// Double line box (═, ║, ╔, ╗, ╚, ╝)
     Double,
+    /// Heavy line box (━, ┃, ┏, ┓, ┗, ┛)
+    Heavy,
+    /// Rounded corners (╭, ╮, ╰, ╯)
+    Rounded,
+    /// ASCII box (+, -, |)
+    Ascii,
     /// Mixed or unknown style
     Mixed,
 }

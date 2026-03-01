@@ -76,6 +76,8 @@ impl DaemonClient {
                     font: None,
                     font_size: None,
                     line_height: None,
+                    fg_color: None,
+                    bg_color: None,
                 },
             )
             .await?;

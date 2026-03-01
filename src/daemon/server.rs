@@ -189,6 +189,16 @@ async fn handle_request(terminal: &Terminal, req: Request) -> Response {
                 if let Some(line_height) = params.line_height {
                     screenshot = screenshot.line_height(line_height);
                 }
+                if let Some(ref fg) = params.fg_color {
+                    let c = parse_color(fg)?;
+                    let (r, g, b) = color_to_rgb(&c);
+                    screenshot = screenshot.fg_color(r, g, b);
+                }
+                if let Some(ref bg) = params.bg_color {
+                    let c = parse_color(bg)?;
+                    let (r, g, b) = color_to_rgb(&c);
+                    screenshot = screenshot.bg_color(r, g, b);
+                }
 
                 let png = screenshot.to_png()?;
                 let png_base64 = base64::engine::general_purpose::STANDARD.encode(png);
@@ -565,6 +575,18 @@ async fn handle_request(terminal: &Terminal, req: Request) -> Response {
     match result {
         Ok(r) => r,
         Err(e) => error_to_response(id, e),
+    }
+}
+
+fn color_to_rgb(color: &crate::screen::Color) -> (u8, u8, u8) {
+    use crate::output::colors::COLOR_256;
+    match color {
+        crate::screen::Color::Default => (255, 255, 255),
+        crate::screen::Color::Indexed(n) => {
+            let rgba = COLOR_256[*n as usize];
+            (rgba.0[0], rgba.0[1], rgba.0[2])
+        }
+        crate::screen::Color::Rgb(r, g, b) => (*r, *g, *b),
     }
 }
 

@@ -22,6 +22,10 @@ pub struct ScreenshotConfig {
     pub font_size: f32,
     /// Line height as a multiplier of font size.
     pub line_height: f32,
+    /// Default foreground color (None = white).
+    pub default_fg: Option<Rgba<u8>>,
+    /// Default background color (None = black).
+    pub default_bg: Option<Rgba<u8>>,
 }
 
 impl Default for ScreenshotConfig {
@@ -30,6 +34,8 @@ impl Default for ScreenshotConfig {
             font_name: None,
             font_size: 14.0,
             line_height: 1.2,
+            default_fg: None,
+            default_bg: None,
         }
     }
 }
@@ -64,6 +70,18 @@ impl Screenshot {
     /// Set the line height multiplier.
     pub fn line_height(mut self, height: f32) -> Self {
         self.config.line_height = height;
+        self
+    }
+
+    /// Set the default foreground color for the screenshot.
+    pub fn fg_color(mut self, r: u8, g: u8, b: u8) -> Self {
+        self.config.default_fg = Some(Rgba([r, g, b, 255]));
+        self
+    }
+
+    /// Set the default background color for the screenshot.
+    pub fn bg_color(mut self, r: u8, g: u8, b: u8) -> Self {
+        self.config.default_bg = Some(Rgba([r, g, b, 255]));
         self
     }
 
@@ -132,9 +150,10 @@ fn render_screen(screen: &Screen, config: &ScreenshotConfig) -> Result<RgbaImage
     let width = screen.size.cols as f32 * char_width;
     let height = screen.size.rows as f32 * line_height;
 
-    // Create image with black background
+    // Create image with background color
     let mut image: RgbaImage = ImageBuffer::new(width.ceil() as u32, height.ceil() as u32);
-    let default_bg = Rgba([0, 0, 0, 255]);
+    let default_fg = config.default_fg.unwrap_or(Rgba([255, 255, 255, 255]));
+    let default_bg = config.default_bg.unwrap_or(Rgba([0, 0, 0, 255]));
     let full_rect = Rect::at(0, 0).of_size(width.ceil() as u32, height.ceil() as u32);
     draw_filled_rect_mut(&mut image, full_rect, default_bg);
 
@@ -145,17 +164,19 @@ fn render_screen(screen: &Screen, config: &ScreenshotConfig) -> Result<RgbaImage
         for (col_idx, cell) in row.iter().enumerate() {
             let x = col_idx as f32 * char_width;
 
-            // Determine colors (handle inverse)
+            // Determine colors (handle inverse and theming)
+            let themed_color = |color: &crate::screen::Color, is_fg: bool| -> Rgba<u8> {
+                match color {
+                    crate::screen::Color::Default => {
+                        if is_fg { default_fg } else { default_bg }
+                    }
+                    _ => color_to_rgba(color, is_fg),
+                }
+            };
             let (fg_color, bg_color) = if cell.attrs.inverse {
-                (
-                    color_to_rgba(&cell.bg, false),
-                    color_to_rgba(&cell.fg, true),
-                )
+                (themed_color(&cell.bg, false), themed_color(&cell.fg, true))
             } else {
-                (
-                    color_to_rgba(&cell.fg, true),
-                    color_to_rgba(&cell.bg, false),
-                )
+                (themed_color(&cell.fg, true), themed_color(&cell.bg, false))
             };
 
             // Draw background
@@ -189,8 +210,11 @@ fn render_screen(screen: &Screen, config: &ScreenshotConfig) -> Result<RgbaImage
         // Get the cell at cursor position for color inversion
         let cursor_cell = screen.cell(cursor.row, cursor.col);
         let cursor_fg = cursor_cell
-            .map(|c| color_to_rgba(&c.fg, true))
-            .unwrap_or(Rgba([255, 255, 255, 255]));
+            .map(|c| match c.fg {
+                crate::screen::Color::Default => default_fg,
+                _ => color_to_rgba(&c.fg, true),
+            })
+            .unwrap_or(default_fg);
 
         // Draw cursor block (semi-transparent white overlay)
         let cursor_rect = Rect::at(cx.round() as i32, cy.round() as i32)
@@ -200,7 +224,10 @@ fn render_screen(screen: &Screen, config: &ScreenshotConfig) -> Result<RgbaImage
         // Redraw the character under cursor in inverted color
         if let Some(cell) = cursor_cell {
             if cell.char != ' ' {
-                let bg = color_to_rgba(&cell.bg, false);
+                let bg = match cell.bg {
+                    crate::screen::Color::Default => default_bg,
+                    _ => color_to_rgba(&cell.bg, false),
+                };
                 draw_text_mut(
                     &mut image,
                     bg,

@@ -565,6 +565,8 @@ async fn exec_daemon_request(socket: &PathBuf, method: &str, params: Option<&str
 struct HubEntry {
     socket: PathBuf,
     pid: u32,
+    command: String,
+    started_at: String,
 }
 
 async fn hub_start(
@@ -595,7 +597,12 @@ async fn hub_start(
             args,
         )
         .await?;
-        entries.push(HubEntry { socket, pid });
+        entries.push(HubEntry {
+            socket,
+            pid,
+            command: command.to_string(),
+            started_at: chrono::Local::now().to_rfc3339(),
+        });
     }
 
     let json = serde_json::to_string_pretty(&entries).map_err(TermwrightError::Json)?;

@@ -89,6 +89,8 @@ pub struct ScreenshotParams {
     pub font: Option<String>,
     pub font_size: Option<f32>,
     pub line_height: Option<f32>,
+    pub fg_color: Option<String>,
+    pub bg_color: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
