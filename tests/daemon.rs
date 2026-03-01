@@ -408,6 +408,57 @@ async fn scrollback_empty_when_no_overflow() -> Result<()> {
     Ok(())
 }
 
+// ── Cell and region tests ────────────────────────────────────────
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn cell_at_returns_character() -> Result<()> {
+    let (client, handle) = setup("printf 'ABCD'; sleep 2").await;
+    client
+        .wait_for_text("ABCD", Some(Duration::from_secs(2)))
+        .await?;
+
+    let cell = client.cell_at(0, 0).await?;
+    assert_eq!(cell.char, 'A');
+
+    let cell = client.cell_at(0, 2).await?;
+    assert_eq!(cell.char, 'C');
+
+    teardown(client, handle).await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn screen_region_returns_text() -> Result<()> {
+    let (client, handle) = setup("printf 'Hello World\\nSecond Line'; sleep 2").await;
+    client
+        .wait_for_text("Second", Some(Duration::from_secs(2)))
+        .await?;
+
+    let region = client.screen_region(0, 0, 2, 11).await?;
+    assert!(region.contains("Hello World"));
+    assert!(region.contains("Second Line"));
+
+    teardown(client, handle).await;
+    Ok(())
+}
+
+// ── Handshake tests ─────────────────────────────────────────────
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn handshake_includes_child_pid() -> Result<()> {
+    let (client, handle) = setup("sleep 5").await;
+
+    let result: serde_json::Value = client
+        .call_raw("handshake", serde_json::Value::Null)
+        .await?;
+
+    assert!(result["protocol_version"].as_u64().is_some());
+    assert!(result["child_pid"].as_u64().is_some());
+
+    teardown(client, handle).await;
+    Ok(())
+}
+
 // ── Status tests ────────────────────────────────────────────────
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

@@ -60,6 +60,7 @@ pub struct HandshakeResult {
     pub protocol_version: u32,
     pub termwright_version: String,
     pub pid: u32,
+    pub child_pid: Option<u32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -210,6 +211,28 @@ pub struct WaitForCursorAtParams {
     pub row: u16,
     pub col: u16,
     pub timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CellAtParams {
+    pub row: u16,
+    pub col: u16,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ScreenRegionParams {
+    pub start_row: u16,
+    pub start_col: u16,
+    pub end_row: u16,
+    pub end_col: u16,
+    #[serde(default = "ScreenRegionParams::default_format")]
+    pub format: ScreenFormat,
+}
+
+impl ScreenRegionParams {
+    fn default_format() -> ScreenFormat {
+        ScreenFormat::Text
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

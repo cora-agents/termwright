@@ -162,6 +162,12 @@ impl Terminal {
         TerminalBuilder::new()
     }
 
+    /// Get the child process PID, if available.
+    pub async fn child_pid(&self) -> Option<u32> {
+        let child = self.child.lock().await;
+        child.process_id()
+    }
+
     /// Spawn a command with the given configuration.
     async fn spawn_with_config(
         cmd: &str,

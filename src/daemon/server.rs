@@ -152,6 +152,7 @@ async fn handle_request(terminal: &Terminal, req: Request) -> Response {
                     protocol_version: PROTOCOL_VERSION,
                     termwright_version: env!("CARGO_PKG_VERSION").to_string(),
                     pid: std::process::id(),
+                    child_pid: terminal.child_pid().await,
                 };
                 Ok(Response::ok(id, value)?)
             }
@@ -398,6 +399,48 @@ async fn handle_request(terminal: &Terminal, req: Request) -> Response {
                 let screen = terminal.screen().await;
                 let boxes = screen.detect_boxes();
                 Ok(Response::ok(id, boxes)?)
+            }
+            "cell_at" => {
+                let params: CellAtParams = serde_json::from_value(req.params)
+                    .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
+                let screen = terminal.screen().await;
+                match screen.cell(params.row, params.col) {
+                    Some(cell) => Ok(Response::ok(id, cell)?),
+                    None => Err(TermwrightError::Protocol(format!(
+                        "cell ({}, {}) out of bounds",
+                        params.row, params.col
+                    ))),
+                }
+            }
+            "screen_region" => {
+                let params: ScreenRegionParams = serde_json::from_value(req.params)
+                    .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
+                let screen = terminal.screen().await;
+                let region = crate::screen::Region {
+                    start: crate::screen::Position::new(params.start_row, params.start_col),
+                    end: crate::screen::Position::new(params.end_row, params.end_col),
+                };
+                match params.format {
+                    ScreenFormat::Text => {
+                        let cells = screen.cells_in_region(&region);
+                        let text: String = cells
+                            .iter()
+                            .map(|row| {
+                                row.iter()
+                                    .map(|c| c.char)
+                                    .collect::<String>()
+                                    .trim_end()
+                                    .to_string()
+                            })
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        Ok(Response::ok(id, text)?)
+                    }
+                    _ => {
+                        let cells = screen.cells_in_region(&region);
+                        Ok(Response::ok(id, cells)?)
+                    }
+                }
             }
             "wait_for_cursor_at" => {
                 let params: WaitForCursorAtParams = serde_json::from_value(req.params)

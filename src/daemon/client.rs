@@ -291,6 +291,30 @@ impl DaemonClient {
         self.call("detect_boxes", serde_json::Value::Null).await
     }
 
+    pub async fn cell_at(&self, row: u16, col: u16) -> Result<crate::screen::Cell> {
+        self.call("cell_at", CellAtParams { row, col }).await
+    }
+
+    pub async fn screen_region(
+        &self,
+        start_row: u16,
+        start_col: u16,
+        end_row: u16,
+        end_col: u16,
+    ) -> Result<String> {
+        self.call(
+            "screen_region",
+            ScreenRegionParams {
+                start_row,
+                start_col,
+                end_row,
+                end_col,
+                format: ScreenFormat::Text,
+            },
+        )
+        .await
+    }
+
     pub async fn wait_for_cursor_at(
         &self,
         row: u16,
