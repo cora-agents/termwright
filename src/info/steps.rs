@@ -229,18 +229,19 @@ fn all_steps() -> Vec<StepInfo> {
         StepInfo {
             name: "press",
             category: "input",
-            brief: "Press a single key",
+            brief: "Press a single key or modified key combo",
             params: vec![ParamInfo {
                 name: "key",
                 required: true,
                 r#type: "string",
                 default: None,
-                description: "Key name (Enter, Tab, Up, Down, F1, etc.)",
+                description: "Key name (Enter, Tab, Up, Ctrl+Right, Shift+Up, etc.)",
             }],
-            example: r#"press: {key: "Enter"}"#,
+            example: r#"press: {key: "Ctrl+Shift+Right"}"#,
             tips: vec![
                 "Use `termwright info keys` for valid key names",
                 "Single characters work: {key: \"a\"}",
+                "Modified keys: Ctrl+Up, Shift+Left, Ctrl+Shift+Right",
             ],
         },
         StepInfo {
@@ -260,7 +261,7 @@ fn all_steps() -> Vec<StepInfo> {
         StepInfo {
             name: "hotkey",
             category: "input",
-            brief: "Press a key with modifiers (Ctrl, Alt)",
+            brief: "Press a key with modifiers (Ctrl, Alt, Shift)",
             params: vec![
                 ParamInfo {
                     name: "ch",
@@ -283,9 +284,19 @@ fn all_steps() -> Vec<StepInfo> {
                     default: Some("false"),
                     description: "Hold Alt key",
                 },
+                ParamInfo {
+                    name: "shift",
+                    required: false,
+                    r#type: "bool",
+                    default: Some("false"),
+                    description: "Hold Shift key",
+                },
             ],
-            example: r#"hotkey: {ctrl: true, ch: "c"}"#,
-            tips: vec!["Use for Ctrl+C, Ctrl+S, Alt+F, etc."],
+            example: r#"hotkey: {ctrl: true, shift: true, ch: "c"}"#,
+            tips: vec![
+                "Use for Ctrl+C, Ctrl+S, Alt+F, etc.",
+                "Combine modifiers: {ctrl: true, shift: true, ch: \"a\"}",
+            ],
         },
         // Assert steps
         StepInfo {

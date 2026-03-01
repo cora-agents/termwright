@@ -108,6 +108,7 @@ pub struct PressParams {
 pub struct HotkeyParams {
     pub ctrl: Option<bool>,
     pub alt: Option<bool>,
+    pub shift: Option<bool>,
     pub ch: char,
 }
 

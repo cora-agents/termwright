@@ -254,6 +254,8 @@ pub struct HotkeyStep {
     pub ctrl: Option<bool>,
     #[serde(default)]
     pub alt: Option<bool>,
+    #[serde(default)]
+    pub shift: Option<bool>,
     pub ch: char,
 }
 

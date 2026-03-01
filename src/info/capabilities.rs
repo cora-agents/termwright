@@ -33,6 +33,11 @@ impl CapabilitiesInfo {
                     available: true,
                 },
                 FeatureInfo {
+                    name: "modifier_keys",
+                    description: "Combined modifier keys (Ctrl+Shift+Arrow, etc.)",
+                    available: true,
+                },
+                FeatureInfo {
                     name: "resize",
                     description: "Terminal resize",
                     available: true,

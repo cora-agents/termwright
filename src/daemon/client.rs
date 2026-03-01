@@ -112,7 +112,8 @@ impl DaemonClient {
             "hotkey",
             HotkeyParams {
                 ctrl: Some(true),
-                alt: Some(false),
+                alt: None,
+                shift: None,
                 ch,
             },
         )
@@ -120,12 +121,19 @@ impl DaemonClient {
         Ok(())
     }
 
-    pub async fn hotkey(&self, ctrl: bool, alt: bool, ch: char) -> Result<()> {
+    pub async fn hotkey(
+        &self,
+        ctrl: bool,
+        alt: bool,
+        shift: bool,
+        ch: char,
+    ) -> Result<()> {
         self.call::<_, serde_json::Value>(
             "hotkey",
             HotkeyParams {
                 ctrl: Some(ctrl),
                 alt: Some(alt),
+                shift: Some(shift),
                 ch,
             },
         )

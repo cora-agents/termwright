@@ -209,13 +209,36 @@ async fn handle_request(terminal: &Terminal, req: Request) -> Response {
                 let params: HotkeyParams = serde_json::from_value(req.params)
                     .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
 
-                if params.ctrl.unwrap_or(false) {
-                    terminal.send_key(Key::Ctrl(params.ch)).await?;
-                } else if params.alt.unwrap_or(false) {
-                    terminal.send_key(Key::Alt(params.ch)).await?;
-                } else {
-                    terminal.send_key(Key::Char(params.ch)).await?;
-                }
+                let ctrl = params.ctrl.unwrap_or(false);
+                let alt = params.alt.unwrap_or(false);
+                let shift = params.shift.unwrap_or(false);
+
+                let key = match (ctrl, alt, shift) {
+                    // Single modifier
+                    (true, false, false) => Key::Ctrl(params.ch),
+                    (false, true, false) => Key::Alt(params.ch),
+                    // Combined modifiers — send raw escape sequence
+                    _ if ctrl || alt || shift => {
+                        // Build xterm modifier: 1 + (Shift?1:0) + (Alt?2:0) + (Ctrl?4:0)
+                        let modifier: u8 = 1
+                            + if shift { 1 } else { 0 }
+                            + if alt { 2 } else { 0 }
+                            + if ctrl { 4 } else { 0 };
+                        // For single chars with combined modifiers, send raw
+                        let mut seq = vec![0x1b];
+                        seq.push(b'[');
+                        seq.extend_from_slice(b"27;");
+                        seq.extend_from_slice(modifier.to_string().as_bytes());
+                        seq.push(b';');
+                        seq.extend_from_slice((params.ch as u32).to_string().as_bytes());
+                        seq.push(b'~');
+                        terminal.send_raw(&seq).await?;
+                        return Ok(Response::ok_empty(id));
+                    }
+                    // No modifiers
+                    _ => Key::Char(params.ch),
+                };
+                terminal.send_key(key).await?;
 
                 Ok(Response::ok_empty(id))
             }
@@ -433,6 +456,7 @@ fn parse_key(input: &str) -> Result<Key> {
     let key = match normalized.as_str() {
         "enter" => Key::Enter,
         "tab" => Key::Tab,
+        "backtab" | "shift+tab" | "shift_tab" => Key::BackTab,
         "escape" | "esc" => Key::Escape,
         "backspace" => Key::Backspace,
         "delete" | "del" => Key::Delete,
@@ -444,6 +468,10 @@ fn parse_key(input: &str) -> Result<Key> {
         "end" => Key::End,
         "pageup" | "page_up" => Key::PageUp,
         "pagedown" | "page_down" => Key::PageDown,
+        // Modified arrow/nav keys: Shift+Up, Ctrl+Left, Ctrl+Shift+Right, etc.
+        _ if normalized.contains('+') => {
+            return parse_modified_key(input);
+        }
         _ if normalized.starts_with('f') => {
             let n: u8 = normalized[1..]
                 .parse()
@@ -463,6 +491,82 @@ fn parse_key(input: &str) -> Result<Key> {
     };
 
     Ok(key)
+}
+
+/// Parse a modified key like "Ctrl+Up", "Shift+Left", "Ctrl+Shift+Right".
+///
+/// xterm modifier codes:
+///   2 = Shift
+///   3 = Alt
+///   4 = Shift+Alt
+///   5 = Ctrl
+///   6 = Ctrl+Shift
+///   7 = Ctrl+Alt
+///   8 = Ctrl+Shift+Alt
+fn parse_modified_key(input: &str) -> Result<Key> {
+    let parts: Vec<&str> = input.trim().split('+').collect();
+    if parts.len() < 2 {
+        return Err(TermwrightError::Protocol(format!("invalid modified key: {input}")));
+    }
+
+    let (modifier_parts, base_part) = parts.split_at(parts.len() - 1);
+    let base_name = base_part[0];
+
+    let mut shift = false;
+    let mut ctrl = false;
+    let mut alt = false;
+
+    for part in modifier_parts {
+        match part.trim().to_lowercase().as_str() {
+            "shift" => shift = true,
+            "ctrl" | "control" => ctrl = true,
+            "alt" | "meta" => alt = true,
+            other => {
+                return Err(TermwrightError::Protocol(format!(
+                    "unknown modifier: {other}"
+                )));
+            }
+        }
+    }
+
+    // For Ctrl+<char> or Alt+<char> without navigation base, use existing Key variants
+    let base_lower = base_name.trim().to_lowercase();
+    let base_key = match base_lower.as_str() {
+        "up" => Key::Up,
+        "down" => Key::Down,
+        "left" => Key::Left,
+        "right" => Key::Right,
+        "home" => Key::Home,
+        "end" => Key::End,
+        "pageup" | "page_up" => Key::PageUp,
+        "pagedown" | "page_down" => Key::PageDown,
+        "delete" | "del" => Key::Delete,
+        "tab" if shift && !ctrl && !alt => return Ok(Key::BackTab),
+        _ => {
+            // Single character base — use Ctrl/Alt variants directly
+            let ch = base_name.trim();
+            if ch.len() == 1 {
+                let c = ch.chars().next().unwrap();
+                if ctrl && !alt && !shift {
+                    return Ok(Key::Ctrl(c));
+                } else if alt && !ctrl && !shift {
+                    return Ok(Key::Alt(c));
+                }
+            }
+            return Err(TermwrightError::Protocol(format!(
+                "unsupported modified key: {input}"
+            )));
+        }
+    };
+
+    // Compute xterm modifier code: 1 + (Shift ? 1 : 0) + (Alt ? 2 : 0) + (Ctrl ? 4 : 0)
+    let modifier: u8 =
+        1 + if shift { 1 } else { 0 } + if alt { 2 } else { 0 } + if ctrl { 4 } else { 0 };
+
+    Ok(Key::Modified {
+        base: Box::new(base_key),
+        modifier,
+    })
 }
 
 fn parse_mouse_buttons(buttons: Option<&[String]>) -> Result<Vec<MouseButton>> {

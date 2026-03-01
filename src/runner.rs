@@ -164,6 +164,7 @@ async fn execute_step(client: &DaemonClient, step: &Step) -> Result<()> {
                 .hotkey(
                     hotkey.ctrl.unwrap_or(false),
                     hotkey.alt.unwrap_or(false),
+                    hotkey.shift.unwrap_or(false),
                     hotkey.ch,
                 )
                 .await

@@ -37,6 +37,14 @@ pub enum Key {
     Ctrl(char),
     /// Alt + character.
     Alt(char),
+    /// Shift+Tab (back-tab).
+    BackTab,
+    /// Modified arrow/navigation key with xterm modifiers.
+    /// modifier: 2=Shift, 3=Alt, 5=Ctrl, 6=Ctrl+Shift, etc.
+    Modified {
+        base: Box<Key>,
+        modifier: u8,
+    },
 }
 
 impl Key {
@@ -90,6 +98,25 @@ impl Key {
                 let mut buf = [0u8; 4];
                 seq.extend_from_slice(c.encode_utf8(&mut buf).as_bytes());
                 seq
+            }
+            Key::BackTab => vec![0x1b, b'[', b'Z'],
+            Key::Modified { base, modifier } => {
+                // xterm modified key format: ESC[1;<modifier><suffix>
+                // Arrow keys: A=Up B=Down C=Right D=Left
+                // Home/End: H/F
+                // Other keys use ESC[<code>;<modifier>~
+                match base.as_ref() {
+                    Key::Up => format!("\x1b[1;{}A", modifier).into_bytes(),
+                    Key::Down => format!("\x1b[1;{}B", modifier).into_bytes(),
+                    Key::Right => format!("\x1b[1;{}C", modifier).into_bytes(),
+                    Key::Left => format!("\x1b[1;{}D", modifier).into_bytes(),
+                    Key::Home => format!("\x1b[1;{}H", modifier).into_bytes(),
+                    Key::End => format!("\x1b[1;{}F", modifier).into_bytes(),
+                    Key::PageUp => format!("\x1b[5;{}~", modifier).into_bytes(),
+                    Key::PageDown => format!("\x1b[6;{}~", modifier).into_bytes(),
+                    Key::Delete => format!("\x1b[3;{}~", modifier).into_bytes(),
+                    _ => vec![],
+                }
             }
         }
     }

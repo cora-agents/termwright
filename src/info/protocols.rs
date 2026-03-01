@@ -153,19 +153,19 @@ fn all_methods() -> Vec<MethodInfo> {
         MethodInfo {
             name: "press",
             category: "input",
-            brief: "Press a single key",
+            brief: "Press a single key or modified key combo",
             params: r#"{key: string}"#,
             response: "null",
-            example_request: r#"{"id":1,"method":"press","params":{"key":"Enter"}}"#,
+            example_request: r#"{"id":1,"method":"press","params":{"key":"Ctrl+Shift+Right"}}"#,
             example_response: r#"{"id":1,"result":null}"#,
         },
         MethodInfo {
             name: "hotkey",
             category: "input",
             brief: "Press key with modifiers",
-            params: r#"{ch: char, ctrl?: bool, alt?: bool}"#,
+            params: r#"{ch: char, ctrl?: bool, alt?: bool, shift?: bool}"#,
             response: "null",
-            example_request: r#"{"id":1,"method":"hotkey","params":{"ctrl":true,"ch":"c"}}"#,
+            example_request: r#"{"id":1,"method":"hotkey","params":{"ctrl":true,"shift":true,"ch":"c"}}"#,
             example_response: r#"{"id":1,"result":null}"#,
         },
         MethodInfo {
