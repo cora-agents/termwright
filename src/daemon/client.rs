@@ -403,6 +403,34 @@ impl DaemonClient {
         Ok(())
     }
 
+    pub async fn start_recording(&self, interval_ms: u64) -> Result<()> {
+        self.call::<_, serde_json::Value>(
+            "start_recording",
+            StartRecordingParams { interval_ms },
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn stop_recording(&self) -> Result<RecordingResult> {
+        self.call("stop_recording", serde_json::Value::Null).await
+    }
+
+    pub async fn wait_for_screen_change(
+        &self,
+        last_hash: Option<String>,
+        timeout: Option<Duration>,
+    ) -> Result<ScreenChangeResult> {
+        self.call(
+            "wait_for_screen_change",
+            WaitForScreenChangeParams {
+                last_hash,
+                timeout_ms: timeout.map(|d| d.as_millis() as u64),
+            },
+        )
+        .await
+    }
+
     pub async fn wait_for_exit(&self, timeout: Option<Duration>) -> Result<i32> {
         let res: WaitForExitResult = self
             .call(

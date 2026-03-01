@@ -215,6 +215,38 @@ impl WaitForColorAtParams {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct WaitForScreenChangeParams {
+    /// Hash of the last-seen screen content (from a previous screen or screen_change response).
+    pub last_hash: Option<String>,
+    pub timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ScreenChangeResult {
+    pub text: String,
+    pub hash: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct StartRecordingParams {
+    /// Interval between frames in milliseconds (default: 100).
+    #[serde(default = "StartRecordingParams::default_interval_ms")]
+    pub interval_ms: u64,
+}
+
+impl StartRecordingParams {
+    fn default_interval_ms() -> u64 {
+        100
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RecordingResult {
+    pub gif_base64: String,
+    pub frames: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ResizeParams {
     pub cols: u16,
     pub rows: u16,

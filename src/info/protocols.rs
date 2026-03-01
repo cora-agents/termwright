@@ -121,6 +121,24 @@ fn all_methods() -> Vec<MethodInfo> {
             example_request: r#"{"id":1,"method":"close","params":null}"#,
             example_response: r#"{"id":1,"result":null,"error":{"code":"closing","message":"closing"}}"#,
         },
+        MethodInfo {
+            name: "start_recording",
+            category: "session",
+            brief: "Start GIF recording of terminal screen",
+            params: r#"{interval_ms?: number}"#,
+            response: "null",
+            example_request: r#"{"id":1,"method":"start_recording","params":{"interval_ms":100}}"#,
+            example_response: r#"{"id":1,"result":null}"#,
+        },
+        MethodInfo {
+            name: "stop_recording",
+            category: "session",
+            brief: "Stop recording and return GIF as base64",
+            params: "null",
+            response: r#"{gif_base64: string, frames: number}"#,
+            example_request: r#"{"id":1,"method":"stop_recording","params":null}"#,
+            example_response: r#"{"id":1,"result":{"gif_base64":"R0lGODlh...","frames":10}}"#,
+        },
         // Screen
         MethodInfo {
             name: "screen",
@@ -378,6 +396,15 @@ fn all_methods() -> Vec<MethodInfo> {
             response: "null",
             example_request: r#"{"id":1,"method":"wait_for_color_at","params":{"row":0,"col":0,"color":"red","target":"fg","timeout_ms":5000}}"#,
             example_response: r#"{"id":1,"result":null}"#,
+        },
+        MethodInfo {
+            name: "wait_for_screen_change",
+            category: "wait",
+            brief: "Wait for screen content to change from last-seen state",
+            params: r#"{last_hash?: string, timeout_ms?: number}"#,
+            response: r#"{text: string, hash: string}"#,
+            example_request: r#"{"id":1,"method":"wait_for_screen_change","params":{"last_hash":"abc123","timeout_ms":5000}}"#,
+            example_response: r#"{"id":1,"result":{"text":"new screen content","hash":"def456"}}"#,
         },
         // Control
         MethodInfo {

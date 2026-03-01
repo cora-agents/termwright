@@ -30,6 +30,11 @@ impl DaemonConfig {
     }
 }
 
+struct DaemonRecording {
+    frames: Vec<(crate::screen::Screen, Duration)>,
+    interval: Duration,
+}
+
 pub async fn run_daemon(config: DaemonConfig, terminal: Terminal) -> Result<()> {
     let socket_path = config.socket_path;
     if socket_path.exists() {
@@ -40,7 +45,8 @@ pub async fn run_daemon(config: DaemonConfig, terminal: Terminal) -> Result<()> 
     let listener = UnixListener::bind(&socket_path)
         .map_err(|e| TermwrightError::Ipc(format!("failed to bind socket: {e}")))?;
 
-    let result = accept_clients(listener, &terminal).await;
+    let recording = std::sync::Arc::new(tokio::sync::Mutex::new(Option::<DaemonRecording>::None));
+    let result = accept_clients(listener, &terminal, &recording).await;
 
     // Best-effort cleanup
     let _ = terminal.kill().await;
@@ -50,7 +56,13 @@ pub async fn run_daemon(config: DaemonConfig, terminal: Terminal) -> Result<()> 
 }
 
 /// Accept multiple client connections until `close` is called or process exits.
-async fn accept_clients(listener: UnixListener, terminal: &Terminal) -> Result<()> {
+type SharedRecording = std::sync::Arc<tokio::sync::Mutex<Option<DaemonRecording>>>;
+
+async fn accept_clients(
+    listener: UnixListener,
+    terminal: &Terminal,
+    recording: &SharedRecording,
+) -> Result<()> {
     loop {
         // Check if the spawned process has exited
         if terminal.has_exited().await {
@@ -73,7 +85,7 @@ async fn accept_clients(listener: UnixListener, terminal: &Terminal) -> Result<(
         };
 
         // Serve this client; if they send `close`, we exit the loop
-        match serve_client(stream, terminal).await {
+        match serve_client(stream, terminal, recording).await {
             Ok(ClientResult::Continue) => {
                 // Client disconnected normally, accept next client
                 continue;
@@ -91,19 +103,49 @@ async fn accept_clients(listener: UnixListener, terminal: &Terminal) -> Result<(
     }
 }
 
-async fn serve_client(stream: UnixStream, terminal: &Terminal) -> Result<ClientResult> {
+async fn serve_client(
+    stream: UnixStream,
+    terminal: &Terminal,
+    recording: &SharedRecording,
+) -> Result<ClientResult> {
     let (read_half, mut write_half) = stream.into_split();
     let mut reader = BufReader::new(read_half);
 
     loop {
         let mut line = String::new();
-        let n = reader
-            .read_line(&mut line)
-            .await
-            .map_err(|e| TermwrightError::Ipc(format!("read failed: {e}")))?;
-        if n == 0 {
-            // Client disconnected, ready for next client
-            return Ok(ClientResult::Continue);
+
+        // If recording, race between client read and frame capture
+        let is_recording = recording.lock().await.is_some();
+        if is_recording {
+            let interval = recording
+                .lock()
+                .await
+                .as_ref()
+                .map(|r| r.interval)
+                .unwrap_or(Duration::from_millis(100));
+            tokio::select! {
+                result = reader.read_line(&mut line) => {
+                    let n = result.map_err(|e| TermwrightError::Ipc(format!("read failed: {e}")))?;
+                    if n == 0 {
+                        return Ok(ClientResult::Continue);
+                    }
+                }
+                _ = tokio::time::sleep(interval) => {
+                    let screen = terminal.screen().await;
+                    if let Some(ref mut rec) = *recording.lock().await {
+                        rec.frames.push((screen, interval));
+                    }
+                    continue;
+                }
+            }
+        } else {
+            let n = reader
+                .read_line(&mut line)
+                .await
+                .map_err(|e| TermwrightError::Ipc(format!("read failed: {e}")))?;
+            if n == 0 {
+                return Ok(ClientResult::Continue);
+            }
         }
 
         let req: Request = match serde_json::from_str(&line) {
@@ -115,11 +157,80 @@ async fn serve_client(stream: UnixStream, terminal: &Terminal) -> Result<ClientR
             }
         };
 
-        let resp = handle_request(terminal, req).await;
+        let resp = match req.method.as_str() {
+            "start_recording" => {
+                let id = req.id;
+                match serde_json::from_value::<StartRecordingParams>(req.params) {
+                    Ok(params) => {
+                        let interval = Duration::from_millis(params.interval_ms);
+                        let screen = terminal.screen().await;
+                        *recording.lock().await = Some(DaemonRecording {
+                            frames: vec![(screen, interval)],
+                            interval,
+                        });
+                        Response::ok_empty(id)
+                    }
+                    Err(e) => Response::err(id, "protocol_error", e.to_string()),
+                }
+            }
+            "stop_recording" => {
+                let id = req.id;
+                let taken = recording.lock().await.take();
+                match taken {
+                    Some(rec) => {
+                        let mut recorder = crate::output::GifRecorder::new();
+                        let count = rec.frames.len();
+                        let mut encode_ok = true;
+                        for (screen, duration) in &rec.frames {
+                            if let Err(e) = recorder.add_frame(screen, *duration) {
+                                write_response(
+                                    &mut write_half,
+                                    &Response::err(id, "recording_error", e.to_string()),
+                                )
+                                .await?;
+                                encode_ok = false;
+                                break;
+                            }
+                        }
+                        if encode_ok {
+                            match recorder.to_gif() {
+                                Ok(gif_bytes) => {
+                                    let gif_base64 =
+                                        base64::engine::general_purpose::STANDARD.encode(gif_bytes);
+                                    match Response::ok(
+                                        id,
+                                        RecordingResult {
+                                            gif_base64,
+                                            frames: count,
+                                        },
+                                    ) {
+                                        Ok(r) => r,
+                                        Err(e) => {
+                                            Response::err(id, "encoding_error", e.to_string())
+                                        }
+                                    }
+                                }
+                                Err(e) => Response::err(id, "recording_error", e.to_string()),
+                            }
+                        } else {
+                            continue;
+                        }
+                    }
+                    None => Response::err(id, "no_recording", "no recording in progress"),
+                }
+            }
+            _ => handle_request(terminal, req).await,
+        };
+
+        // Capture frame after each request while recording
+        if let Some(ref mut rec) = *recording.lock().await {
+            let screen = terminal.screen().await;
+            rec.frames.push((screen, rec.interval));
+        }
+
         write_response(&mut write_half, &resp).await?;
 
         if resp.error.as_ref().is_some_and(|e| e.code == "closing") {
-            // Client sent `close` command, daemon should exit
             return Ok(ClientResult::Close);
         }
     }
@@ -553,6 +664,37 @@ async fn handle_request(terminal: &Terminal, req: Request) -> Response {
 
                 Ok(Response::ok(id, WaitForExitResult { exit_code })?)
             }
+            "wait_for_screen_change" => {
+                let params: WaitForScreenChangeParams = serde_json::from_value(req.params)
+                    .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
+                let timeout = params
+                    .timeout_ms
+                    .map(Duration::from_millis)
+                    .unwrap_or(Duration::from_secs(30));
+                let deadline = tokio::time::Instant::now() + timeout;
+
+                loop {
+                    let screen = terminal.screen().await;
+                    let text = screen.text();
+                    let hash = format!("{:016x}", hash_screen_text(&text));
+
+                    if params.last_hash.as_ref() != Some(&hash) {
+                        return Ok(Response::ok(
+                            id,
+                            ScreenChangeResult { text, hash },
+                        )?);
+                    }
+
+                    if tokio::time::Instant::now() > deadline {
+                        return Err(TermwrightError::Timeout {
+                            condition: "screen to change".to_string(),
+                            timeout,
+                        });
+                    }
+
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                }
+            }
             "resize" => {
                 let params: ResizeParams = serde_json::from_value(req.params)
                     .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
@@ -576,6 +718,14 @@ async fn handle_request(terminal: &Terminal, req: Request) -> Response {
         Ok(r) => r,
         Err(e) => error_to_response(id, e),
     }
+}
+
+fn hash_screen_text(text: &str) -> u64 {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let mut hasher = DefaultHasher::new();
+    text.hash(&mut hasher);
+    hasher.finish()
 }
 
 fn color_to_rgb(color: &crate::screen::Color) -> (u8, u8, u8) {
