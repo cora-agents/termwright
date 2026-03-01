@@ -224,6 +224,34 @@ async fn execute_step(client: &DaemonClient, step: &Step) -> Result<()> {
         Step::Raw { raw } => {
             client.raw(&raw.bytes_base64).await
         }
+        Step::MouseDrag { mouse_drag } => {
+            let button = mouse_drag
+                .button
+                .as_deref()
+                .unwrap_or("left")
+                .parse::<MouseButton>()
+                .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
+            client
+                .mouse_drag(
+                    mouse_drag.start_row,
+                    mouse_drag.start_col,
+                    mouse_drag.end_row,
+                    mouse_drag.end_col,
+                    button,
+                )
+                .await
+        }
+        Step::MouseDoubleClick { mouse_double_click } => {
+            let button = mouse_double_click
+                .button
+                .as_deref()
+                .unwrap_or("left")
+                .parse::<MouseButton>()
+                .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
+            client
+                .mouse_double_click(mouse_double_click.row, mouse_double_click.col, button)
+                .await
+        }
     }
 }
 
@@ -436,6 +464,8 @@ fn step_label(step: &Step) -> String {
         Step::Resize { .. } => "resize".to_string(),
         Step::Sleep { .. } => "sleep".to_string(),
         Step::Raw { .. } => "raw".to_string(),
+        Step::MouseDrag { .. } => "mouseDrag".to_string(),
+        Step::MouseDoubleClick { .. } => "mouseDoubleClick".to_string(),
     }
 }
 

@@ -122,6 +122,109 @@ impl Key {
     }
 }
 
+impl std::str::FromStr for Key {
+    type Err = String;
+
+    fn from_str(input: &str) -> std::result::Result<Self, Self::Err> {
+        let normalized = input.trim().to_lowercase();
+
+        match normalized.as_str() {
+            "enter" => Ok(Key::Enter),
+            "tab" => Ok(Key::Tab),
+            "backtab" | "shift+tab" | "shift_tab" => Ok(Key::BackTab),
+            "escape" | "esc" => Ok(Key::Escape),
+            "backspace" => Ok(Key::Backspace),
+            "delete" | "del" => Ok(Key::Delete),
+            "up" => Ok(Key::Up),
+            "down" => Ok(Key::Down),
+            "left" => Ok(Key::Left),
+            "right" => Ok(Key::Right),
+            "home" => Ok(Key::Home),
+            "end" => Ok(Key::End),
+            "pageup" | "page_up" => Ok(Key::PageUp),
+            "pagedown" | "page_down" => Ok(Key::PageDown),
+            _ if normalized.contains('+') => parse_modified_key(input),
+            _ if normalized.starts_with('f') => {
+                let n: u8 = normalized[1..]
+                    .parse()
+                    .map_err(|_| format!("invalid key: {input}"))?;
+                Ok(Key::F(n))
+            }
+            _ => {
+                let mut chars = input.chars();
+                let ch = chars
+                    .next()
+                    .ok_or_else(|| "empty key".to_string())?;
+                if chars.next().is_some() {
+                    return Err(format!("invalid key: {input}"));
+                }
+                Ok(Key::Char(ch))
+            }
+        }
+    }
+}
+
+/// Parse a modified key like "Ctrl+Up", "Shift+Left", "Ctrl+Shift+Right".
+fn parse_modified_key(input: &str) -> std::result::Result<Key, String> {
+    let parts: Vec<&str> = input.trim().split('+').collect();
+    if parts.len() < 2 {
+        return Err(format!("invalid modified key: {input}"));
+    }
+
+    let (modifier_parts, base_part) = parts.split_at(parts.len() - 1);
+    let base_name = base_part[0];
+
+    let mut shift = false;
+    let mut ctrl = false;
+    let mut alt = false;
+
+    for part in modifier_parts {
+        match part.trim().to_lowercase().as_str() {
+            "shift" => shift = true,
+            "ctrl" | "control" => ctrl = true,
+            "alt" | "meta" => alt = true,
+            other => {
+                return Err(format!("unknown modifier: {other}"));
+            }
+        }
+    }
+
+    let base_lower = base_name.trim().to_lowercase();
+    let base_key = match base_lower.as_str() {
+        "up" => Key::Up,
+        "down" => Key::Down,
+        "left" => Key::Left,
+        "right" => Key::Right,
+        "home" => Key::Home,
+        "end" => Key::End,
+        "pageup" | "page_up" => Key::PageUp,
+        "pagedown" | "page_down" => Key::PageDown,
+        "delete" | "del" => Key::Delete,
+        "tab" if shift && !ctrl && !alt => return Ok(Key::BackTab),
+        _ => {
+            let ch = base_name.trim();
+            if ch.len() == 1 {
+                let c = ch.chars().next().unwrap();
+                if ctrl && !alt && !shift {
+                    return Ok(Key::Ctrl(c));
+                } else if alt && !ctrl && !shift {
+                    return Ok(Key::Alt(c));
+                }
+            }
+            return Err(format!("unsupported modified key: {input}"));
+        }
+    };
+
+    // xterm modifier: 1 + (Shift?1:0) + (Alt?2:0) + (Ctrl?4:0)
+    let modifier: u8 =
+        1 + if shift { 1 } else { 0 } + if alt { 2 } else { 0 } + if ctrl { 4 } else { 0 };
+
+    Ok(Key::Modified {
+        base: Box::new(base_key),
+        modifier,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

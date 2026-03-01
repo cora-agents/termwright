@@ -295,6 +295,44 @@ async fn handle_request(terminal: &Terminal, req: Request) -> Response {
                     .await?;
                 Ok(Response::ok_empty(id))
             }
+            "mouse_drag" => {
+                let params: MouseDragParams = serde_json::from_value(req.params)
+                    .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
+
+                let button = params
+                    .button
+                    .as_deref()
+                    .unwrap_or("left")
+                    .parse::<MouseButton>()
+                    .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
+
+                terminal
+                    .mouse_drag(
+                        params.start_row,
+                        params.start_col,
+                        params.end_row,
+                        params.end_col,
+                        button,
+                    )
+                    .await?;
+                Ok(Response::ok_empty(id))
+            }
+            "mouse_double_click" => {
+                let params: MouseClickParams = serde_json::from_value(req.params)
+                    .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
+
+                let button = params
+                    .button
+                    .as_deref()
+                    .unwrap_or("left")
+                    .parse::<MouseButton>()
+                    .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
+
+                terminal
+                    .mouse_double_click(params.row, params.col, button)
+                    .await?;
+                Ok(Response::ok_empty(id))
+            }
             "wait_for_text" => {
                 let params: WaitForTextParams = serde_json::from_value(req.params)
                     .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
@@ -500,122 +538,9 @@ async fn handle_request(terminal: &Terminal, req: Request) -> Response {
 }
 
 fn parse_key(input: &str) -> Result<Key> {
-    let normalized = input.trim().to_lowercase();
-
-    let key = match normalized.as_str() {
-        "enter" => Key::Enter,
-        "tab" => Key::Tab,
-        "backtab" | "shift+tab" | "shift_tab" => Key::BackTab,
-        "escape" | "esc" => Key::Escape,
-        "backspace" => Key::Backspace,
-        "delete" | "del" => Key::Delete,
-        "up" => Key::Up,
-        "down" => Key::Down,
-        "left" => Key::Left,
-        "right" => Key::Right,
-        "home" => Key::Home,
-        "end" => Key::End,
-        "pageup" | "page_up" => Key::PageUp,
-        "pagedown" | "page_down" => Key::PageDown,
-        // Modified arrow/nav keys: Shift+Up, Ctrl+Left, Ctrl+Shift+Right, etc.
-        _ if normalized.contains('+') => {
-            return parse_modified_key(input);
-        }
-        _ if normalized.starts_with('f') => {
-            let n: u8 = normalized[1..]
-                .parse()
-                .map_err(|_| TermwrightError::Protocol(format!("invalid key: {input}")))?;
-            Key::F(n)
-        }
-        _ => {
-            let mut chars = input.chars();
-            let ch = chars
-                .next()
-                .ok_or_else(|| TermwrightError::Protocol("empty key".to_string()))?;
-            if chars.next().is_some() {
-                return Err(TermwrightError::Protocol(format!("invalid key: {input}")));
-            }
-            Key::Char(ch)
-        }
-    };
-
-    Ok(key)
-}
-
-/// Parse a modified key like "Ctrl+Up", "Shift+Left", "Ctrl+Shift+Right".
-///
-/// xterm modifier codes:
-///   2 = Shift
-///   3 = Alt
-///   4 = Shift+Alt
-///   5 = Ctrl
-///   6 = Ctrl+Shift
-///   7 = Ctrl+Alt
-///   8 = Ctrl+Shift+Alt
-fn parse_modified_key(input: &str) -> Result<Key> {
-    let parts: Vec<&str> = input.trim().split('+').collect();
-    if parts.len() < 2 {
-        return Err(TermwrightError::Protocol(format!("invalid modified key: {input}")));
-    }
-
-    let (modifier_parts, base_part) = parts.split_at(parts.len() - 1);
-    let base_name = base_part[0];
-
-    let mut shift = false;
-    let mut ctrl = false;
-    let mut alt = false;
-
-    for part in modifier_parts {
-        match part.trim().to_lowercase().as_str() {
-            "shift" => shift = true,
-            "ctrl" | "control" => ctrl = true,
-            "alt" | "meta" => alt = true,
-            other => {
-                return Err(TermwrightError::Protocol(format!(
-                    "unknown modifier: {other}"
-                )));
-            }
-        }
-    }
-
-    // For Ctrl+<char> or Alt+<char> without navigation base, use existing Key variants
-    let base_lower = base_name.trim().to_lowercase();
-    let base_key = match base_lower.as_str() {
-        "up" => Key::Up,
-        "down" => Key::Down,
-        "left" => Key::Left,
-        "right" => Key::Right,
-        "home" => Key::Home,
-        "end" => Key::End,
-        "pageup" | "page_up" => Key::PageUp,
-        "pagedown" | "page_down" => Key::PageDown,
-        "delete" | "del" => Key::Delete,
-        "tab" if shift && !ctrl && !alt => return Ok(Key::BackTab),
-        _ => {
-            // Single character base — use Ctrl/Alt variants directly
-            let ch = base_name.trim();
-            if ch.len() == 1 {
-                let c = ch.chars().next().unwrap();
-                if ctrl && !alt && !shift {
-                    return Ok(Key::Ctrl(c));
-                } else if alt && !ctrl && !shift {
-                    return Ok(Key::Alt(c));
-                }
-            }
-            return Err(TermwrightError::Protocol(format!(
-                "unsupported modified key: {input}"
-            )));
-        }
-    };
-
-    // Compute xterm modifier code: 1 + (Shift ? 1 : 0) + (Alt ? 2 : 0) + (Ctrl ? 4 : 0)
-    let modifier: u8 =
-        1 + if shift { 1 } else { 0 } + if alt { 2 } else { 0 } + if ctrl { 4 } else { 0 };
-
-    Ok(Key::Modified {
-        base: Box::new(base_key),
-        modifier,
-    })
+    input
+        .parse::<Key>()
+        .map_err(|e| TermwrightError::Protocol(format!("Protocol error: {e}")))
 }
 
 fn parse_mouse_buttons(buttons: Option<&[String]>) -> Result<Vec<MouseButton>> {

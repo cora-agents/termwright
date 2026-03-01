@@ -178,6 +178,46 @@ impl DaemonClient {
         Ok(())
     }
 
+    pub async fn mouse_drag(
+        &self,
+        start_row: u16,
+        start_col: u16,
+        end_row: u16,
+        end_col: u16,
+        button: MouseButton,
+    ) -> Result<()> {
+        self.call::<_, serde_json::Value>(
+            "mouse_drag",
+            MouseDragParams {
+                start_row,
+                start_col,
+                end_row,
+                end_col,
+                button: Some(button.to_string()),
+            },
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn mouse_double_click(
+        &self,
+        row: u16,
+        col: u16,
+        button: MouseButton,
+    ) -> Result<()> {
+        self.call::<_, serde_json::Value>(
+            "mouse_double_click",
+            MouseClickParams {
+                row,
+                col,
+                button: Some(button.to_string()),
+            },
+        )
+        .await?;
+        Ok(())
+    }
+
     pub async fn mouse_move(&self, row: u16, col: u16) -> Result<()> {
         self.call::<_, serde_json::Value>(
             "mouse_move",

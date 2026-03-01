@@ -456,6 +456,34 @@ impl Terminal {
         self.send_raw(&bytes).await
     }
 
+    /// Drag the mouse from one position to another.
+    pub async fn mouse_drag(
+        &self,
+        start_row: u16,
+        start_col: u16,
+        end_row: u16,
+        end_col: u16,
+        button: MouseButton,
+    ) -> Result<&Self> {
+        self.mouse_down(start_row, start_col, button).await?;
+        // Send move event with button held (button code + 32 for motion)
+        let code = button.press_code() + 32;
+        let bytes = encode_sgr_mouse(code, end_row, end_col, true);
+        self.send_raw(&bytes).await?;
+        self.mouse_up(end_row, end_col).await
+    }
+
+    /// Double-click at the given position.
+    pub async fn mouse_double_click(
+        &self,
+        row: u16,
+        col: u16,
+        button: MouseButton,
+    ) -> Result<&Self> {
+        self.mouse_click(row, col, button).await?;
+        self.mouse_click(row, col, button).await
+    }
+
     /// Scroll the mouse wheel at the given cell position.
     ///
     /// Sends `count` scroll events in the given direction.

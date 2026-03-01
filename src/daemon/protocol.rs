@@ -214,6 +214,15 @@ pub struct WaitForCursorAtParams {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct MouseDragParams {
+    pub start_row: u16,
+    pub start_col: u16,
+    pub end_row: u16,
+    pub end_col: u16,
+    pub button: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CellAtParams {
     pub row: u16,
     pub col: u16,

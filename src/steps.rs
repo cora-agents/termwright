@@ -209,6 +209,14 @@ pub enum Step {
     Raw {
         raw: RawStep,
     },
+    MouseDrag {
+        #[serde(rename = "mouseDrag")]
+        mouse_drag: MouseDragStep,
+    },
+    MouseDoubleClick {
+        #[serde(rename = "mouseDoubleClick")]
+        mouse_double_click: MouseClickStep,
+    },
 }
 
 #[derive(Debug, Deserialize)]
@@ -315,6 +323,17 @@ pub struct ScreenshotStep {
 pub struct MouseClickStep {
     pub row: u16,
     pub col: u16,
+    #[serde(default)]
+    pub button: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MouseDragStep {
+    pub start_row: u16,
+    pub start_col: u16,
+    pub end_row: u16,
+    pub end_col: u16,
     #[serde(default)]
     pub button: Option<String>,
 }

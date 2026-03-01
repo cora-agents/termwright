@@ -61,6 +61,14 @@ enum Commands {
         #[arg(long)]
         wait_for: Option<String>,
 
+        /// Type text into the terminal after wait/delay
+        #[arg(long = "type")]
+        type_text: Option<String>,
+
+        /// Press a key after typing (e.g. Enter, Tab, Ctrl+C)
+        #[arg(long)]
+        press: Option<String>,
+
         /// Delay in milliseconds before capturing (after wait_for or startup)
         #[arg(long, default_value = "500")]
         delay: u64,
@@ -303,6 +311,8 @@ async fn main() -> Result<()> {
             cols,
             rows,
             wait_for,
+            type_text,
+            press,
             delay,
             format,
             timeout,
@@ -313,6 +323,8 @@ async fn main() -> Result<()> {
                 cols,
                 rows,
                 wait_for,
+                type_text,
+                press,
                 delay,
                 format,
                 timeout,
@@ -433,6 +445,8 @@ async fn run_command(
     cols: u16,
     rows: u16,
     wait_for: Option<String>,
+    type_text: Option<String>,
+    press: Option<String>,
     delay: u64,
     format: OutputFormat,
     timeout: u64,
@@ -441,6 +455,8 @@ async fn run_command(
     command: &str,
     args: &[String],
 ) -> Result<()> {
+    use termwright::input::Key;
+
     let args_str: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
 
     let mut builder = Terminal::builder().size(cols, rows);
@@ -458,6 +474,19 @@ async fn run_command(
         term.expect(&text)
             .timeout(Duration::from_secs(timeout))
             .await?;
+    }
+
+    // Type text if specified
+    if let Some(text) = type_text {
+        term.type_str(&text).await?;
+    }
+
+    // Press key if specified
+    if let Some(key_name) = press {
+        let key: Key = key_name
+            .parse()
+            .map_err(|e: String| TermwrightError::Protocol(e))?;
+        term.send_key(key).await?;
     }
 
     // Additional delay
