@@ -259,6 +259,23 @@ fn all_steps() -> Vec<StepInfo> {
             tips: vec!["Does not press Enter at the end; use a separate press step"],
         },
         StepInfo {
+            name: "paste",
+            category: "input",
+            brief: "Paste text using bracketed paste mode",
+            params: vec![ParamInfo {
+                name: "text",
+                required: true,
+                r#type: "string",
+                default: None,
+                description: "Text to paste",
+            }],
+            example: r#"paste: {text: "pasted content"}"#,
+            tips: vec![
+                "Wraps text in ESC[200~ / ESC[201~ bracketed paste sequences",
+                "Applications that support bracketed paste (vim, zsh, etc.) treat this as pasted content rather than typed input",
+            ],
+        },
+        StepInfo {
             name: "hotkey",
             category: "input",
             brief: "Press a key with modifiers (Ctrl, Alt, Shift)",

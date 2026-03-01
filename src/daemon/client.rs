@@ -105,6 +105,12 @@ impl DaemonClient {
         Ok(())
     }
 
+    pub async fn paste(&self, text: impl Into<String>) -> Result<()> {
+        self.call::<_, serde_json::Value>("paste", PasteParams { text: text.into() })
+            .await?;
+        Ok(())
+    }
+
     pub async fn press(&self, key: impl Into<String>) -> Result<()> {
         self.call::<_, serde_json::Value>("press", PressParams { key: key.into() })
             .await?;

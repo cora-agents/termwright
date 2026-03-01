@@ -162,6 +162,93 @@ impl Screen {
             .join("\n")
     }
 
+    /// Get the screen content as ANSI-formatted text with color/attribute codes.
+    pub fn ansi_text(&self) -> String {
+        let mut out = String::new();
+
+        for (i, row) in self.cells.iter().enumerate() {
+            if i > 0 {
+                out.push('\n');
+            }
+
+            // Trim trailing default cells
+            let last_non_default = row
+                .iter()
+                .rposition(|c| c.char != ' ' || c.fg != Color::Default || c.bg != Color::Default || c.attrs.bold || c.attrs.italic || c.attrs.underline || c.attrs.inverse)
+                .map(|p| p + 1)
+                .unwrap_or(0);
+
+            let mut prev_fg = Color::Default;
+            let mut prev_bg = Color::Default;
+            let mut prev_attrs = CellAttributes::default();
+
+            for cell in &row[..last_non_default] {
+                let mut codes: Vec<String> = Vec::new();
+
+                // Reset needed if attributes dropped
+                let needs_reset = (prev_attrs.bold && !cell.attrs.bold)
+                    || (prev_attrs.italic && !cell.attrs.italic)
+                    || (prev_attrs.underline && !cell.attrs.underline)
+                    || (prev_attrs.inverse && !cell.attrs.inverse);
+
+                if needs_reset {
+                    codes.push("0".to_string());
+                    prev_fg = Color::Default;
+                    prev_bg = Color::Default;
+                    prev_attrs = CellAttributes::default();
+                }
+
+                if cell.attrs.bold && !prev_attrs.bold {
+                    codes.push("1".to_string());
+                }
+                if cell.attrs.italic && !prev_attrs.italic {
+                    codes.push("3".to_string());
+                }
+                if cell.attrs.underline && !prev_attrs.underline {
+                    codes.push("4".to_string());
+                }
+                if cell.attrs.inverse && !prev_attrs.inverse {
+                    codes.push("7".to_string());
+                }
+
+                if cell.fg != prev_fg {
+                    match cell.fg {
+                        Color::Default => codes.push("39".to_string()),
+                        Color::Indexed(n) if n < 8 => codes.push(format!("{}", 30 + n)),
+                        Color::Indexed(n) if n < 16 => codes.push(format!("{}", 90 + n - 8)),
+                        Color::Indexed(n) => codes.push(format!("38;5;{n}")),
+                        Color::Rgb(r, g, b) => codes.push(format!("38;2;{r};{g};{b}")),
+                    }
+                }
+                if cell.bg != prev_bg {
+                    match cell.bg {
+                        Color::Default => codes.push("49".to_string()),
+                        Color::Indexed(n) if n < 8 => codes.push(format!("{}", 40 + n)),
+                        Color::Indexed(n) if n < 16 => codes.push(format!("{}", 100 + n - 8)),
+                        Color::Indexed(n) => codes.push(format!("48;5;{n}")),
+                        Color::Rgb(r, g, b) => codes.push(format!("48;2;{r};{g};{b}")),
+                    }
+                }
+
+                if !codes.is_empty() {
+                    out.push_str(&format!("\x1b[{}m", codes.join(";")));
+                }
+
+                out.push(cell.char);
+                prev_fg = cell.fg;
+                prev_bg = cell.bg;
+                prev_attrs = cell.attrs;
+            }
+
+            // Reset at end of line if any formatting was active
+            if prev_fg != Color::Default || prev_bg != Color::Default || prev_attrs.bold || prev_attrs.italic || prev_attrs.underline || prev_attrs.inverse {
+                out.push_str("\x1b[0m");
+            }
+        }
+
+        out
+    }
+
     /// Get a single line of text (0-indexed).
     pub fn line(&self, row: u16) -> Option<String> {
         self.cells.get(row as usize).map(|row| {

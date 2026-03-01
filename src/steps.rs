@@ -162,6 +162,9 @@ pub enum Step {
         #[serde(rename = "type")]
         r#type: TypeStep,
     },
+    Paste {
+        paste: PasteStep,
+    },
     Hotkey {
         hotkey: HotkeyStep,
     },
@@ -252,6 +255,11 @@ pub struct PressStep {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TypeStep {
+    pub text: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PasteStep {
     pub text: String,
 }
 

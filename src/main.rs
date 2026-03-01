@@ -279,6 +279,7 @@ enum OutputFormat {
     Text,
     Json,
     JsonCompact,
+    Ansi,
 }
 
 impl std::str::FromStr for OutputFormat {
@@ -289,8 +290,9 @@ impl std::str::FromStr for OutputFormat {
             "text" => Ok(OutputFormat::Text),
             "json" => Ok(OutputFormat::Json),
             "json-compact" | "jsoncompact" => Ok(OutputFormat::JsonCompact),
+            "ansi" => Ok(OutputFormat::Ansi),
             _ => Err(format!(
-                "Unknown format: {}. Use text, json, or json-compact",
+                "Unknown format: {}. Use text, json, json-compact, or ansi",
                 s
             )),
         }
@@ -504,6 +506,9 @@ async fn run_command(
         }
         OutputFormat::JsonCompact => {
             println!("{}", screen.to_json_compact()?);
+        }
+        OutputFormat::Ansi => {
+            println!("{}", screen.ansi_text());
         }
     }
 

@@ -69,6 +69,7 @@ pub enum ScreenFormat {
     Text,
     Json,
     JsonCompact,
+    Ansi,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -97,6 +98,11 @@ pub struct ScreenshotResult {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TypeParams {
+    pub text: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PasteParams {
     pub text: String,
 }
 

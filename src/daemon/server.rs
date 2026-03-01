@@ -175,6 +175,7 @@ async fn handle_request(terminal: &Terminal, req: Request) -> Response {
                     ScreenFormat::Text => Ok(Response::ok(id, screen.text())?),
                     ScreenFormat::Json => Ok(Response::ok(id, screen)?),
                     ScreenFormat::JsonCompact => Ok(Response::ok(id, screen.to_json_compact()?)?),
+                    ScreenFormat::Ansi => Ok(Response::ok(id, screen.ansi_text())?),
                 }
             }
             "screenshot" => {
@@ -203,6 +204,12 @@ async fn handle_request(terminal: &Terminal, req: Request) -> Response {
                 let params: TypeParams = serde_json::from_value(req.params)
                     .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
                 terminal.type_str(&params.text).await?;
+                Ok(Response::ok_empty(id))
+            }
+            "paste" => {
+                let params: PasteParams = serde_json::from_value(req.params)
+                    .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
+                terminal.paste(&params.text).await?;
                 Ok(Response::ok_empty(id))
             }
             "press" => {
@@ -474,6 +481,11 @@ async fn handle_request(terminal: &Terminal, req: Request) -> Response {
                             .join("\n");
                         Ok(Response::ok(id, text)?)
                     }
+                    ScreenFormat::Ansi => {
+                        // Not implemented for region — fall back to JSON
+                        let cells = screen.cells_in_region(&region);
+                        Ok(Response::ok(id, cells)?)
+                    }
                     _ => {
                         let cells = screen.cells_in_region(&region);
                         Ok(Response::ok(id, cells)?)
@@ -533,7 +545,40 @@ async fn handle_request(terminal: &Terminal, req: Request) -> Response {
 
     match result {
         Ok(r) => r,
-        Err(e) => Response::err(id, "error", e.to_string()),
+        Err(e) => error_to_response(id, e),
+    }
+}
+
+fn error_to_response(id: u64, e: TermwrightError) -> Response {
+    let (code, data) = match &e {
+        TermwrightError::Timeout { condition, timeout } => (
+            "timeout",
+            Some(serde_json::json!({
+                "condition": condition,
+                "timeout_ms": timeout.as_millis() as u64,
+            })),
+        ),
+        TermwrightError::PatternNotFound { pattern } => (
+            "pattern_not_found",
+            Some(serde_json::json!({ "pattern": pattern })),
+        ),
+        TermwrightError::ProcessExited { code } => (
+            "process_exited",
+            Some(serde_json::json!({ "exit_code": code })),
+        ),
+        TermwrightError::Protocol(_) => ("protocol_error", None),
+        TermwrightError::Ipc(_) => ("ipc_error", None),
+        _ => ("error", None),
+    };
+
+    Response {
+        id,
+        result: serde_json::Value::Null,
+        error: Some(ResponseError {
+            code: code.to_string(),
+            message: e.to_string(),
+            data,
+        }),
     }
 }
 

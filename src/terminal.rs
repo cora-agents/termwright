@@ -371,6 +371,22 @@ impl Terminal {
         Ok(self)
     }
 
+    /// Paste text using bracketed paste mode (wraps in ESC[200~ / ESC[201~).
+    pub async fn paste(&self, text: &str) -> Result<&Self> {
+        let mut writer = self.writer.lock().await;
+        writer
+            .write_all(b"\x1b[200~")
+            .map_err(TermwrightError::Pty)?;
+        writer
+            .write_all(text.as_bytes())
+            .map_err(TermwrightError::Pty)?;
+        writer
+            .write_all(b"\x1b[201~")
+            .map_err(TermwrightError::Pty)?;
+        writer.flush().map_err(TermwrightError::Pty)?;
+        Ok(self)
+    }
+
     /// Send a key to the terminal.
     pub async fn send_key(&self, key: Key) -> Result<&Self> {
         let bytes = key.to_escape_sequence();

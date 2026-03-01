@@ -159,6 +159,7 @@ async fn execute_step(client: &DaemonClient, step: &Step) -> Result<()> {
         } => wait_for_pattern_gone_step(client, wait_for_pattern_gone).await,
         Step::Press { press } => client.press(&press.key).await,
         Step::Type { r#type } => client.r#type(&r#type.text).await,
+        Step::Paste { paste } => client.paste(&paste.text).await,
         Step::Hotkey { hotkey } => {
             client
                 .hotkey(
@@ -451,6 +452,7 @@ fn step_label(step: &Step) -> String {
         Step::WaitForPatternGone { .. } => "waitForPatternGone".to_string(),
         Step::Press { .. } => "press".to_string(),
         Step::Type { .. } => "type".to_string(),
+        Step::Paste { .. } => "paste".to_string(),
         Step::Hotkey { .. } => "hotkey".to_string(),
         Step::ExpectText { .. } => "expectText".to_string(),
         Step::ExpectPattern { .. } => "expectPattern".to_string(),
