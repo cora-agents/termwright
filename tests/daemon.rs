@@ -349,6 +349,65 @@ async fn mouse_operations_succeed() -> Result<()> {
     Ok(())
 }
 
+// ── Scrollback tests ────────────────────────────────────────────
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn scrollback_captures_scrolled_content() -> Result<()> {
+    // Print more lines than the 24-row terminal can display
+    let (client, handle) = setup(
+        "for i in $(seq 1 50); do echo \"line-$i\"; done; sleep 2",
+    )
+    .await;
+
+    // Wait for the last line to appear
+    client
+        .wait_for_text("line-50", Some(Duration::from_secs(3)))
+        .await?;
+
+    let scrollback = client.scrollback(None).await?;
+    // Lines 1-26 should have scrolled off (50 lines, 24 visible)
+    assert!(!scrollback.is_empty(), "scrollback should have content");
+
+    // Check that early lines are in scrollback
+    let joined = scrollback.join("\n");
+    assert!(joined.contains("line-1"), "should contain early lines");
+
+    teardown(client, handle).await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn scrollback_with_limit() -> Result<()> {
+    let (client, handle) = setup(
+        "for i in $(seq 1 50); do echo \"line-$i\"; done; sleep 2",
+    )
+    .await;
+
+    client
+        .wait_for_text("line-50", Some(Duration::from_secs(3)))
+        .await?;
+
+    let scrollback = client.scrollback(Some(5)).await?;
+    assert!(scrollback.len() <= 5, "limit should cap result");
+
+    teardown(client, handle).await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn scrollback_empty_when_no_overflow() -> Result<()> {
+    let (client, handle) = setup("echo hello; sleep 2").await;
+    client
+        .wait_for_text("hello", Some(Duration::from_secs(2)))
+        .await?;
+
+    let scrollback = client.scrollback(None).await?;
+    assert!(scrollback.is_empty(), "no scrollback when content fits");
+
+    teardown(client, handle).await;
+    Ok(())
+}
+
 // ── Status tests ────────────────────────────────────────────────
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

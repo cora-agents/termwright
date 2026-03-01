@@ -95,6 +95,10 @@ impl DaemonClient {
             .await
     }
 
+    pub async fn scrollback(&self, limit: Option<usize>) -> Result<Vec<String>> {
+        self.call("scrollback", ScrollbackParams { limit }).await
+    }
+
     pub async fn r#type(&self, text: impl Into<String>) -> Result<()> {
         self.call::<_, serde_json::Value>("type", TypeParams { text: text.into() })
             .await?;

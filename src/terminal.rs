@@ -315,6 +315,46 @@ impl Terminal {
         Screen::from_vt100(parser.screen())
     }
 
+    /// Get the scrollback buffer content as plain text lines.
+    ///
+    /// Returns the most recent lines that have scrolled off the top of the
+    /// visible screen. Due to a vt100 crate limitation, at most `rows`
+    /// scrollback lines can be read per call (where `rows` is the terminal
+    /// height). The `limit` parameter further caps the result.
+    pub async fn scrollback_text(&self, limit: Option<usize>) -> Vec<String> {
+        let mut parser = self.parser.lock().await;
+        let (rows, cols) = parser.screen().size();
+        let rows_usize = rows as usize;
+
+        // vt100's visible_rows() does `rows_len - scrollback_offset` which
+        // underflows when offset > rows_len. We must clamp to rows_usize.
+        parser.set_scrollback(rows_usize);
+        let actual = parser.screen().scrollback();
+
+        if actual == 0 {
+            parser.set_scrollback(0);
+            return Vec::new();
+        }
+
+        // actual = min(rows_usize, scrollback_buffer_len)
+        // Read the scrollback rows from the viewport. When scrollback is N,
+        // the first N rows in the viewport are scrollback content.
+        let to_read = match limit {
+            Some(l) => l.min(actual),
+            None => actual,
+        };
+
+        let screen = parser.screen();
+        let lines: Vec<String> = screen
+            .rows(0, cols)
+            .take(to_read)
+            .map(|r| r.trim_end().to_string())
+            .collect();
+
+        parser.set_scrollback(0);
+        lines
+    }
+
     /// Type a string of text into the terminal.
     pub async fn type_str(&self, text: &str) -> Result<&Self> {
         let mut writer = self.writer.lock().await;

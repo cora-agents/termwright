@@ -28,6 +28,11 @@ impl CapabilitiesInfo {
                     available: true,
                 },
                 FeatureInfo {
+                    name: "scrollback",
+                    description: "Scrollback buffer access (1000 lines)",
+                    available: true,
+                },
+                FeatureInfo {
                     name: "mouse",
                     description: "Mouse input with scroll wheel (SGR mode)",
                     available: true,

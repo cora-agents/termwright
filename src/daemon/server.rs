@@ -192,6 +192,12 @@ async fn handle_request(terminal: &Terminal, req: Request) -> Response {
                 let png_base64 = base64::engine::general_purpose::STANDARD.encode(png);
                 Ok(Response::ok(id, ScreenshotResult { png_base64 })?)
             }
+            "scrollback" => {
+                let params: ScrollbackParams = serde_json::from_value(req.params)
+                    .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
+                let lines = terminal.scrollback_text(params.limit).await;
+                Ok(Response::ok(id, lines)?)
+            }
             "type" => {
                 let params: TypeParams = serde_json::from_value(req.params)
                     .map_err(|e| TermwrightError::Protocol(e.to_string()))?;

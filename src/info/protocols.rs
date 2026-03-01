@@ -132,6 +132,15 @@ fn all_methods() -> Vec<MethodInfo> {
             example_response: r#"{"id":1,"result":"Screen content here..."}"#,
         },
         MethodInfo {
+            name: "scrollback",
+            category: "screen",
+            brief: "Get scrollback buffer content",
+            params: r#"{limit?: number}"#,
+            response: "string[] (lines)",
+            example_request: r#"{"id":1,"method":"scrollback","params":{"limit":50}}"#,
+            example_response: r#"{"id":1,"result":["line 1","line 2","line 3"]}"#,
+        },
+        MethodInfo {
             name: "screenshot",
             category: "screen",
             brief: "Capture PNG screenshot",

@@ -213,6 +213,11 @@ pub struct WaitForCursorAtParams {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct ScrollbackParams {
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct StatusResult {
     pub exited: bool,
     pub exit_code: Option<i32>,
