@@ -8,10 +8,13 @@ Termwright enables AI agents and integration tests to interact with and observe 
 
 - **PTY Wrapping**: Spawn and control any terminal application
 - **Screen Reading**: Access text, colors, cursor position, and cell attributes
-- **Wait Conditions**: Wait for text, regex patterns, screen stability, or process exit
-- **Input Simulation**: Send keystrokes, special keys, and control sequences
-- **Multiple Output Formats**: Plain text, JSON (for AI agents), and PNG screenshots
-- **Box Detection**: Detect UI boundaries using box-drawing characters
+- **Wait Conditions**: Wait for text, regex patterns, screen stability, cursor position, color, screen change, or process exit
+- **Input Simulation**: Send keystrokes, modifier combos, mouse clicks/scroll/drag, and bracketed paste
+- **Multiple Output Formats**: Plain text, JSON (for AI agents), ANSI SGR, and PNG screenshots
+- **GIF Recording**: Record terminal sessions as animated GIFs with configurable frame intervals
+- **Box Detection**: Detect UI boundaries using box-drawing characters (single, double, heavy, rounded, ASCII)
+- **Screen Inspection**: Cell-level attribute access, rectangular region extraction, scrollback buffer
+- **Screenshot Theming**: Configurable foreground/background colors with cursor rendering
 - **Framework Agnostic**: Works with any TUI framework (ratatui, crossterm, ncurses, etc.)
 
 ## Installation
@@ -174,18 +177,70 @@ tw '{"id":99,"method":"close","params":null}'
 
 ### Available Daemon Commands
 
+**Session**
+
 | Method | Params | Description |
 |--------|--------|-------------|
-| `handshake` | `null` | Get daemon info (pid, version) |
-| `screen` | `{"format":"text"\|"json"}` | Get current screen content |
-| `screenshot` | `{}` | Get PNG screenshot as base64 |
-| `press` | `{"key":"Enter"}` | Press a key (Enter, Escape, Tab, Up, Down, etc.) |
-| `type` | `{"text":"..."}` | Type text |
-| `hotkey` | `{"ctrl":true,"ch":"c"}` | Send Ctrl/Alt combinations |
-| `wait_for_text` | `{"text":"...","timeout_ms":5000}` | Wait for text to appear |
-| `wait_for_idle` | `{"idle_ms":500,"timeout_ms":5000}` | Wait for screen to stabilize |
+| `handshake` | `null` | Get daemon info (pid, child_pid, version) |
 | `status` | `null` | Check if process is still running |
 | `close` | `null` | Terminate the daemon and child process |
+| `resize` | `{"cols":120,"rows":40}` | Resize the terminal |
+| `start_recording` | `{"interval_ms":100}` | Start GIF recording (default 100ms between frames) |
+| `stop_recording` | `null` | Stop recording, returns `{gif_base64, frames}` |
+
+**Screen**
+
+| Method | Params | Description |
+|--------|--------|-------------|
+| `screen` | `{"format":"text"\|"json"\|"ansi"}` | Get screen content |
+| `screenshot` | `{"fg_color":"#fff","bg_color":"#000"}` | Get PNG screenshot as base64 (colors optional) |
+| `scrollback` | `{"limit":50}` | Get scrollback buffer lines |
+
+**Input**
+
+| Method | Params | Description |
+|--------|--------|-------------|
+| `type` | `{"text":"..."}` | Type text |
+| `paste` | `{"text":"..."}` | Paste text (bracketed paste mode) |
+| `press` | `{"key":"Ctrl+Shift+Right"}` | Press a key or key combo |
+| `hotkey` | `{"ctrl":true,"alt":false,"shift":false,"ch":"c"}` | Press key with modifiers |
+| `raw` | `{"bytes_base64":"..."}` | Send raw bytes |
+| `mouse_click` | `{"row":5,"col":10,"button":"left"}` | Click at position |
+| `mouse_double_click` | `{"row":5,"col":10}` | Double-click at position |
+| `mouse_scroll` | `{"row":5,"col":10,"direction":"down","count":3}` | Scroll wheel |
+| `mouse_drag` | `{"start_row":1,"start_col":5,"end_row":1,"end_col":20}` | Drag from A to B |
+| `mouse_move` | `{"row":5,"col":10}` | Move mouse cursor |
+
+**Wait Conditions**
+
+| Method | Params | Description |
+|--------|--------|-------------|
+| `wait_for_text` | `{"text":"...","timeout_ms":5000}` | Wait for text to appear |
+| `wait_for_pattern` | `{"pattern":"v\\d+","timeout_ms":5000}` | Wait for regex match |
+| `wait_for_idle` | `{"idle_ms":500,"timeout_ms":5000}` | Wait for screen to stabilize |
+| `wait_for_exit` | `{"timeout_ms":5000}` | Wait for process to exit, returns exit code |
+| `wait_for_text_gone` | `{"text":"Loading...","timeout_ms":5000}` | Wait for text to disappear |
+| `wait_for_pattern_gone` | `{"pattern":"\\d+%","timeout_ms":5000}` | Wait for pattern to stop matching |
+| `wait_for_cursor_at` | `{"row":0,"col":5,"timeout_ms":5000}` | Wait for cursor to reach position |
+| `wait_for_color_at` | `{"row":0,"col":0,"color":"red","target":"fg"}` | Wait for cell color to match |
+| `wait_for_screen_change` | `{"last_hash":"abc","timeout_ms":5000}` | Wait for screen content to change |
+
+**Search & Inspect**
+
+| Method | Params | Description |
+|--------|--------|-------------|
+| `find_text` | `{"text":"Ready"}` | Find all occurrences, returns positions |
+| `find_pattern` | `{"pattern":"v\\d+\\.\\d+"}` | Find all regex matches |
+| `detect_boxes` | `null` | Detect box-drawing rectangles |
+| `cell_at` | `{"row":0,"col":5}` | Get cell char, colors, and attributes |
+| `screen_region` | `{"start_row":0,"start_col":0,"end_row":2,"end_col":10}` | Extract rectangular region |
+
+**Assertions**
+
+| Method | Params | Description |
+|--------|--------|-------------|
+| `not_expect_text` | `{"text":"ERROR"}` | Assert text is NOT on screen (error if found) |
+| `not_expect_pattern` | `{"pattern":"error\|fail"}` | Assert pattern does NOT match |
 
 ### Reusable Test Library
 
@@ -256,6 +311,57 @@ assert_contains "$SOCK" "Settings" "Enter opens settings"
 
 ctrl "$SOCK" "q"
 echo "All tests passed!"
+```
+
+### Recording a Session as GIF
+
+Capture an animated GIF of a terminal workflow:
+
+```bash
+# Start recording (100ms between frames)
+tw '{"id":1,"method":"start_recording","params":{"interval_ms":100}}'
+
+# Interact with the app
+tw '{"id":2,"method":"type","params":{"text":"hello world"}}'
+tw '{"id":3,"method":"press","params":{"key":"Enter"}}'
+sleep 1  # let things happen visually
+
+# Stop recording and save GIF
+RESULT=$(tw '{"id":4,"method":"stop_recording","params":null}')
+echo "$RESULT" | jq -r '.result.gif_base64' | base64 -d > session.gif
+FRAMES=$(echo "$RESULT" | jq '.result.frames')
+echo "Captured $FRAMES frames"
+```
+
+Recording persists across separate `exec` calls, so you can start recording, run multiple interactions, and stop later.
+
+### Themed Screenshots
+
+Customize screenshot colors:
+
+```bash
+# Dark theme with green text
+tw '{"id":1,"method":"screenshot","params":{"fg_color":"#00ff00","bg_color":"#1a1a2e"}}'
+
+# Named colors: black, red, green, yellow, blue, magenta, cyan, white
+# Hex colors: #rrggbb
+# Indexed colors: 0-255
+```
+
+Screenshots include the cursor as an inverted block at its current position.
+
+### Screen Change Detection
+
+Efficiently wait for screen updates without polling:
+
+```bash
+# Get initial screen state
+RESULT=$(tw '{"id":1,"method":"wait_for_screen_change","params":null}')
+HASH=$(echo "$RESULT" | jq -r '.result.hash')
+
+# Block until screen changes
+RESULT=$(tw '{"id":2,"method":"wait_for_screen_change","params":{"last_hash":"'$HASH'","timeout_ms":10000}}')
+echo "$RESULT" | jq -r '.result.text'  # new screen content
 ```
 
 ### Key Names Reference
@@ -381,7 +487,7 @@ async fn main() -> Result<()> {
 
     // Sanity check: talk to the server
     let info = client.handshake().await?;
-    println!("daemon pid={}", info.pid);
+    println!("daemon pid={}, child={:?}", info.pid, info.child_pid);
 
     // Wait and read screen
     client.wait_for_text("VIM", Some(Duration::from_secs(5))).await?;
@@ -391,10 +497,43 @@ async fn main() -> Result<()> {
     client.press("Escape").await?;
     client.hotkey_ctrl('r').await?;
     client.r#type(":q!\n").await?;
+    client.paste("multi\nline\ncontent").await?;  // Bracketed paste
 
     // Mouse (row/col are 0-based cell coordinates)
-    client.mouse_move(10, 10).await?;
     client.mouse_click(10, 10, MouseButton::Left).await?;
+    client.mouse_scroll(5, 5, ScrollDirection::Down, Some(3)).await?;
+    client.mouse_drag(1, 5, 1, 20, MouseButton::Left).await?;
+
+    // Search
+    let matches = client.find_text("error").await?;
+    let pattern_matches = client.find_pattern(r"\d+\.\d+").await?;
+
+    // Inspect
+    let cell = client.cell_at(0, 5).await?;
+    let region = client.screen_region(0, 0, 5, 40).await?;
+    let boxes = client.detect_boxes().await?;
+    let scrollback = client.scrollback(Some(100)).await?;
+
+    // Wait conditions
+    client.wait_for_cursor_at(0, 5, Some(Duration::from_secs(5))).await?;
+    client.wait_for_color_at(0, 0, "red", "fg", Some(Duration::from_secs(5))).await?;
+    client.wait_for_text_gone("Loading...", Some(Duration::from_secs(10))).await?;
+
+    // Screen change detection
+    let change = client.wait_for_screen_change(None, None).await?;
+    let next = client.wait_for_screen_change(
+        Some(change.hash), Some(Duration::from_secs(5))
+    ).await?;
+
+    // GIF recording
+    client.start_recording(100).await?;  // 100ms between frames
+    // ... interact with the app ...
+    let recording = client.stop_recording().await?;
+    println!("Recorded {} frames", recording.frames);
+    // recording.gif_base64 contains the GIF data
+
+    // Screenshots (with optional theming)
+    let png_bytes = client.screenshot_png().await?;
 
     // Shut down daemon + child process
     client.close().await?;
